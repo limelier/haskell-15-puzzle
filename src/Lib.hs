@@ -1,5 +1,5 @@
 module Lib
-    ( someFunc
+    ( shuffleOnce
     ) where
 
 import System.Random
@@ -96,18 +96,19 @@ numPrompt s = do
     readLn
 
 puzzleString :: Puzzle -> String
-puzzleString puz = intercalate "\n--+--+--+--\n" $ map rowString puz 
+puzzleString puz = "╭──┬──┬──┬──╮\n" ++ (intercalate "\n├──┼──┼──┼──┤\n" $ map rowString puz) ++ "\n╰──┴──┴──┴──╯"
 
 rowString :: [Int] -> String
-rowString row = intercalate "|" $ map tileString row
+rowString row = "│" ++ (intercalate "│" $ map tileString row) ++ "│"
 
 tileString :: Int -> String
 tileString n
+    | n == 0 = "  "
     | n <= 9 = ' ' : (show n)
     | otherwise = show n
 
-someFunc :: IO ()
-someFunc = do
+shuffleOnce :: IO ()
+shuffleOnce = do
     g <- getStdGen
     n <- numPrompt "moves to attempt on the puzzle: "
     putStrLn $ puzzleString $ shuffle g n initPuz
