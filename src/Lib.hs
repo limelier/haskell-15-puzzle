@@ -1,11 +1,12 @@
 module Lib
-    ( shuffleOnce
+    ( runGame
     )
 where
 
 import           System.Random
 import           System.IO
 import           Data.List
+import           UI.NCurses
 
 type Puzzle = [[Int]]
 puz :: Integral a => [[a]] -> Puzzle
@@ -109,8 +110,67 @@ tileString n | n == 0    = "  "
              | n <= 9    = ' ' : show n
              | otherwise = show n
 
-shuffleOnce :: IO ()
-shuffleOnce = do
+-- shuffleOnce :: IO ()
+-- shuffleOnce = do
+--     g <- getStdGen
+--     n <- numPrompt "moves to attempt on the puzzle: "
+--     putStrLn $ puzzleString $ shuffle g n initPuz
+
+updatePuzzle :: Window -> Puzzle -> Curses ()
+updatePuzzle w puz = do
+    updateWindow w $ do
+        clear
+        drawString $ puzzleString puz
+    render
+    if (puzzleIsWon puz)
+        then do
+            updateWindow w $ do
+                moveCursor 10 0
+                drawString "You win! Press Q to quit."
+            render
+            waitForQ w
+        else do
+            mMove <- waitForMove w
+            case mMove of
+                Just move -> updatePuzzle w (doMoveOnPuzzle move puz)
+                Nothing   -> return ()
+
+
+waitForMove :: Window -> Curses (Maybe Move)
+waitForMove w = loop  where
+    loop = do
+        ev <- getEvent w Nothing
+        case ev of
+            Nothing                  -> loop
+            Just (EventSpecialKey k) -> case k of
+                KeyUpArrow    -> return $ Just MDown
+                KeyDownArrow  -> return $ Just MUp
+                KeyLeftArrow  -> return $ Just MRight
+                KeyRightArrow -> return $ Just MLeft
+                _             -> loop
+            Just (EventCharacter c) -> case c of
+                'q' -> return Nothing
+                _   -> loop
+            _ -> loop
+
+waitForQ :: Window -> Curses ()
+waitForQ w = loop  where
+    loop = do
+        ev <- getEvent w Nothing
+        case ev of
+            Nothing                 -> loop
+            Just (EventCharacter c) -> case c of
+                'q' -> return ()
+                _   -> loop
+            _ -> loop
+
+runGame :: IO ()
+runGame = do
     g <- getStdGen
-    n <- numPrompt "moves to attempt on the puzzle: "
-    putStrLn $ puzzleString $ shuffle g n initPuz
+    runCurses
+        $ let puzzle = shuffle g 300 initPuz
+          in  do
+                  setEcho False
+                  setCursorMode CursorInvisible
+                  w <- defaultWindow
+                  updatePuzzle w puzzle
