@@ -1,10 +1,10 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.33.0.
+-- This file has been generated from package.yaml by hpack version 0.34.1.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: af93f896e8938d9f5904ba8595537faaa9b0dd81a69ad9b152c7321e70342748
+-- hash: fb287c508011f6975e820205c414aac27b2577091daa0d304f16742c124c14e4
 
 name:           project
 version:        0.1.0.0
@@ -34,7 +34,9 @@ library
       src
   build-depends:
       base >=4.7 && <5
+    , containers
     , ncurses
+    , pqueue
     , random
   default-language: Haskell2010
 
@@ -47,7 +49,9 @@ executable project-exe
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
+    , containers
     , ncurses
+    , pqueue
     , project
     , random
   default-language: Haskell2010
@@ -62,7 +66,9 @@ test-suite project-test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
+    , containers
     , ncurses
+    , pqueue
     , project
     , random
   default-language: Haskell2010

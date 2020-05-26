@@ -6,6 +6,8 @@ where
 import           System.Random
 import           System.IO
 import           Data.List
+import           Data.Maybe
+import qualified Data.PQueue.Prio.Min as PQ
 import           UI.NCurses
 
 type Puzzle = [[Int]]
@@ -18,7 +20,7 @@ puzRow row = map fromIntegral row
 
 initPuz = puz [[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12], [13, 14, 15, 0]]
 
-data Move = MUp | MDown | MLeft| MRight deriving (Enum, Show);
+data Move = MUp | MDown | MLeft | MRight deriving (Enum, Show);
 type Pos = (Int, Int)
 
 invertMove :: Move -> Move
@@ -64,13 +66,18 @@ swapPosInPuzzle (xrow, xcol) (yrow, ycol) puz = swapNumsInPuzzle x y puz
     x = puz !! xrow !! xcol
     y = puz !! yrow !! ycol
 
-doMoveOnPuzzle :: Move -> Puzzle -> Puzzle
-doMoveOnPuzzle move puz = if (validPos newPos)
-    then swapPosInPuzzle oldPos newPos puz
-    else puz
+tryMoveOnPuzzle :: Move -> Puzzle -> Maybe Puzzle
+tryMoveOnPuzzle move puz = if (validPos newPos)
+    then Just (swapPosInPuzzle oldPos newPos puz)
+    else Nothing
   where
     oldPos = posOfNumInPuzzle puz 0
     newPos = shiftPos move oldPos
+
+doMoveOnPuzzle :: Move -> Puzzle -> Puzzle
+doMoveOnPuzzle move puz = case tryMoveOnPuzzle move puz of
+    Nothing -> puz
+    Just puz' -> puz'
 
 puzzleIsWon :: Puzzle -> Bool
 puzzleIsWon puz = puz == initPuz
@@ -174,3 +181,75 @@ runGame = do
                   setCursorMode CursorInvisible
                   w <- defaultWindow
                   updatePuzzle w puzzle
+
+
+-- heuristic: sum of, for each tile, manhattan distance to final position
+heuristic :: Puzzle -> Int
+heuristic puz = sum $ map score [0 .. 15]  where
+    score num =
+        let (wx, wy) = posOfNumInPuzzle initPuz num
+            (x , y ) = posOfNumInPuzzle puz num
+        in  abs (wx - x) + abs (wx - y)
+
+data GameState = GameState {
+    puzz :: Puzzle,
+    dist :: Int,
+    moves :: Int,
+    prev :: Maybe GameState
+} deriving (Show, Eq, Ord)
+
+puzzlesTo :: GameState -> [Puzzle]
+puzzlesTo state = reverse $ revPuzzlesTo state
+    where revPuzzlesTo st = case prev st of
+                                Nothing -> [puzz st]
+                                Just st' -> puzz st : revPuzzlesTo st'
+
+type Frontier = PQ.MinPQueue Int GameState
+
+mkGameState :: Puzzle -> GameState
+mkGameState p = GameState p h 0 Nothing
+    where
+        h = heuristic p
+
+neighbor :: GameState -> Move -> Maybe GameState
+neighbor state m =
+    let p = puzz state in
+        case tryMoveOnPuzzle m (puzz state) of
+            Nothing -> Nothing
+            Just p' -> Just (state {
+                puzz = p',
+                dist = heuristic p',
+                moves = moves state + 1,
+                prev = Just state
+            })
+
+neighbors :: GameState -> [GameState]
+neighbors st = mapMaybe (neighbor st) [MUp, MDown, MLeft, MRight]
+
+solve :: Puzzle -> GameState
+solve p = go (PQ.fromList [(dist st, st)])
+    where 
+        st = mkGameState p
+        go fr = if dist state == 0
+                    then state
+                    else go fr2
+            where
+                -- get most promising game state in frontier
+                ((_, state), fr1) = PQ.deleteFindMin fr
+
+                -- filter old state from neighbors, do not 
+                -- go backwards
+                nbors = case prev state of
+                    Nothing -> neighbors state
+                    Just pre -> filter (\x -> puzz x /= puzz pre)
+                                    (neighbors state)
+                
+                -- priority of puz = moves + heuristic
+                pairs = zip [moves q + dist q | q <- nbors] nbors
+                fr2 = foldr (uncurry PQ.insert) fr1 pairs
+
+solve' :: Puzzle -> [Puzzle]
+solve' p = puzzlesTo (solve p)
+
+p_test = doMoveOnPuzzle MUp initPuz
+ps_test = solve' p_test
