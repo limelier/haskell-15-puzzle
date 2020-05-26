@@ -9,6 +9,8 @@ import           Data.List
 import           Data.Maybe
 import qualified Data.PQueue.Prio.Min as PQ
 import           UI.NCurses
+import           Control.Concurrent
+import           Control.Monad.IO.Class
 
 type Puzzle = [[Int]]
 puz :: Integral a => [[a]] -> Puzzle
@@ -137,26 +139,44 @@ updatePuzzle w puz = do
             render
             waitForQ w
         else do
-            mMove <- waitForMove w
+            (mMove, mChar) <- waitForMove w
             case mMove of
                 Just move -> updatePuzzle w (doMoveOnPuzzle move puz)
-                Nothing   -> return ()
+                Nothing   -> case mChar of
+                    Just 's' -> solveAndQuit w puz
+                    _ -> return ()
 
+solveAndQuit :: Window -> Puzzle -> Curses ()
+solveAndQuit w puz = do
+    showOneSecondApart w puzs
+    return ()
+    where puzs = solve' puz
 
-waitForMove :: Window -> Curses (Maybe Move)
+showOneSecondApart :: Window -> [Puzzle] -> Curses ()
+showOneSecondApart w [] = do return () -- or "do waitForQ w" to delay
+showOneSecondApart w (p:ps) = do
+    updateWindow w $ do
+        clear
+        drawString $ puzzleString p
+    render
+    liftIO $ threadDelay 1000000
+    showOneSecondApart w ps
+
+waitForMove :: Window -> Curses ((Maybe Move, Maybe Char))
 waitForMove w = loop  where
     loop = do
         ev <- getEvent w Nothing
         case ev of
             Nothing                  -> loop
             Just (EventSpecialKey k) -> case k of
-                KeyUpArrow    -> return $ Just MDown
-                KeyDownArrow  -> return $ Just MUp
-                KeyLeftArrow  -> return $ Just MRight
-                KeyRightArrow -> return $ Just MLeft
+                KeyUpArrow    -> return $ (Just MDown, Nothing)
+                KeyDownArrow  -> return $ (Just MUp, Nothing)
+                KeyLeftArrow  -> return $ (Just MRight, Nothing)
+                KeyRightArrow -> return $ (Just MLeft, Nothing)
                 _             -> loop
             Just (EventCharacter c) -> case c of
-                'q' -> return Nothing
+                'q' -> return $ (Nothing, Just 'q')
+                's' -> return $ (Nothing, Just 's')
                 _   -> loop
             _ -> loop
 
@@ -175,7 +195,7 @@ runGame :: IO ()
 runGame = do
     g <- getStdGen
     runCurses
-        $ let puzzle = shuffle g 300 initPuz
+        $ let puzzle = shuffle g 30 initPuz
           in  do
                   setEcho False
                   setCursorMode CursorInvisible
@@ -189,7 +209,18 @@ heuristic puz = sum $ map score [0 .. 15]  where
     score num =
         let (wx, wy) = posOfNumInPuzzle initPuz num
             (x , y ) = posOfNumInPuzzle puz num
-        in  abs (wx - x) + abs (wx - y)
+        in  abs (wx - x) + abs (wy - y)
+
+-- manhattan :: Puzzle -> Int -> Int
+-- manhattan p n = rowDist + colDist 
+--     where 
+--         (wx, wy) = posOfNumInPuzzle initPuz n
+--         ( x,  y) = posOfNumInPuzzle p n
+--         rowDist = abs(wx - x)
+--         colDist = abs(wy - y)
+
+-- heuristic :: Puzzle -> Int
+-- heuristic p = sum $ map (manhattan p) [0 .. 15]
 
 data GameState = GameState {
     puzz :: Puzzle,
@@ -237,6 +268,7 @@ solve p = go (PQ.fromList [(dist st, st)])
                 -- get most promising game state in frontier
                 ((_, state), fr1) = PQ.deleteFindMin fr
 
+
                 -- filter old state from neighbors, do not 
                 -- go backwards
                 nbors = case prev state of
@@ -245,11 +277,8 @@ solve p = go (PQ.fromList [(dist st, st)])
                                     (neighbors state)
                 
                 -- priority of puz = moves + heuristic
-                pairs = zip [moves q + dist q | q <- nbors] nbors
+                pairs = zip [moves nb + dist nb | nb <- nbors] nbors
                 fr2 = foldr (uncurry PQ.insert) fr1 pairs
 
 solve' :: Puzzle -> [Puzzle]
 solve' p = puzzlesTo (solve p)
-
-p_test = doMoveOnPuzzle MUp initPuz
-ps_test = solve' p_test
