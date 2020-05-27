@@ -211,17 +211,6 @@ heuristic puz = sum $ map score [0 .. 15]  where
             (x , y ) = posOfNumInPuzzle puz num
         in  abs (wx - x) + abs (wy - y)
 
--- manhattan :: Puzzle -> Int -> Int
--- manhattan p n = rowDist + colDist 
---     where 
---         (wx, wy) = posOfNumInPuzzle initPuz n
---         ( x,  y) = posOfNumInPuzzle p n
---         rowDist = abs(wx - x)
---         colDist = abs(wy - y)
-
--- heuristic :: Puzzle -> Int
--- heuristic p = sum $ map (manhattan p) [0 .. 15]
-
 data GameState = GameState {
     puzz :: Puzzle,
     dist :: Int,
